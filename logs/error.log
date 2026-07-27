@@ -37,3 +37,7 @@
 {"level":30,"time":1785161431696,"pid":49656,"hostname":"b9a121d9-7011-413a-a4d7-b7cc1fdced4a","msg":"Server berjalan di http://localhost:3000"}
 {"level":30,"time":1785161435823,"pid":49656,"hostname":"b9a121d9-7011-413a-a4d7-b7cc1fdced4a","msg":"Server dimatikan (SIGTERM)"}
 {"level":30,"time":1785161437104,"pid":50197,"hostname":"b9a121d9-7011-413a-a4d7-b7cc1fdced4a","msg":"Server berjalan di http://localhost:3000"}
+{"level":30,"time":1785162036789,"pid":50197,"hostname":"b9a121d9-7011-413a-a4d7-b7cc1fdced4a","msg":"Server dimatikan (SIGTERM)"}
+{"level":30,"time":1785162038209,"pid":59873,"hostname":"b9a121d9-7011-413a-a4d7-b7cc1fdced4a","msg":"Server berjalan di http://localhost:3000"}
+{"level":30,"time":1785162052504,"pid":60001,"hostname":"b9a121d9-7011-413a-a4d7-b7cc1fdced4a","msg":"Server berjalan di http://localhost:4567"}
+{"level":30,"time":1785162057301,"pid":60001,"hostname":"b9a121d9-7011-413a-a4d7-b7cc1fdced4a","msg":"Server dimatikan (SIGTERM)"}

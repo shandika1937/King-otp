@@ -158,7 +158,7 @@ const HistoryPage = {
                 <td class="font-mono text-sm font-medium ${(o.otp && o.otp !== 'Belum ada' && o.otp !== '-') ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}">
                   ${(o.otp && o.otp !== 'Belum ada' && o.otp !== '-') ? o.otp : '-'}
                 </td>
-                <td>${Utils.getStatusBadgeClass(o.status)}</td>
+                <td>${Components.statusBadge(o.status)}</td>
               </tr>
             `).join('')}
           </tbody>
