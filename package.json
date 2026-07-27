@@ -7,8 +7,10 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "build": "echo 'No build step required for this project.'",
-    "start:prod": "NODE_ENV=production node server/index.js"
+    "build": "echo 'No build step required for Vercel. The server runs as a serverless function.'",
+    "start:prod": "NODE_ENV=production node server/index.js",
+    "vercel-build": "echo 'Vercel build complete'",
+    "deploy": "vercel --prod"
   },
   "dependencies": {
     "@vly-ai/integrations": "^0.6.12",

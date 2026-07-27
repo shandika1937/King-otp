@@ -1,59 +1,17 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
 const config = require('./config');
 const logger = require('./logger');
-const apiRoutes = require('./routes/api');
-const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
+const { createApp } = require('./app');
 
 // Validasi API Key
 if (!config.apiKey) {
-  logger.error('API_KEY tidak ditemukan di file .env. Silakan isi API_KEY terlebih dahulu.');
+  logger.error('API_KEY tidak ditemukan. Silakan isi API_KEY di file .env atau environment variables.');
   process.exit(1);
 }
 
-const app = express();
-
-// Trust proxy untuk rate limiter jika di belakang reverse proxy
-app.set('trust proxy', 1);
-
-// Middleware
-app.use(cors(config.cors));
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
-
-// Request logging
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    logger.info(
-      {
-        method: req.method,
-        url: req.originalUrl,
-        status: res.statusCode,
-        duration: `${duration}ms`,
-      },
-      'HTTP Request'
-    );
-  });
-  next();
-});
-
-// Static files - serve client directory
-app.use(express.static(path.join(__dirname, '..', 'client')));
-
-// API Routes
-app.use('/api', apiRoutes);
-
-// 404 handler
-app.use(notFoundHandler);
-
-// Global error handler
-app.use(errorHandler);
+const app = createApp();
 
 // Start server
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   console.log('');
   console.log('╔══════════════════════════════════════════════════╗');
   console.log('║        JasaOTP Premium Dashboard v1.0           ║');
@@ -68,13 +26,13 @@ app.listen(config.port, () => {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  logger.info('Server dimatikan');
-  process.exit(0);
+  logger.info('Server dimatikan (SIGINT)');
+  server.close(() => process.exit(0));
 });
 
 process.on('SIGTERM', () => {
   logger.info('Server dimatikan (SIGTERM)');
-  process.exit(0);
+  server.close(() => process.exit(0));
 });
 
 // Unhandled rejections
