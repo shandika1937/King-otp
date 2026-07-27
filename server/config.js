@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env.local'), override: true });
 
 const config = {
   port: parseInt(process.env.PORT, 10) || 3000,
