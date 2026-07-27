@@ -2,214 +2,123 @@ const axios = require('axios');
 const config = require('../config');
 const logger = require('../logger');
 
-/**
- * JasaOTP API Service
- * Wrapper untuk semua endpoint API JasaOTP
- * Semua error ditangani tanpa membocorkan API key
- */
-
 const client = axios.create({
   baseURL: config.apiBaseUrl,
   timeout: config.requestTimeout,
-  params: {
-    api_key: config.apiKey,
-  },
+  params: { api_key: config.apiKey },
 });
 
-// Interceptor untuk logging request
-client.interceptors.request.use(
-  (req) => {
-    logger.info({ url: req.url, method: req.method }, 'API Request');
-    return req;
-  },
-  (error) => Promise.reject(error)
-);
+client.interceptors.request.use(r => { logger.info({url:r.url,method:r.method},'API Request'); return r; }, e => Promise.reject(e));
+client.interceptors.response.use(r => { logger.info({url:r.config.url,status:r.status},'API Response'); return r; }, e => Promise.reject(e));
 
-// Interceptor untuk logging response
-client.interceptors.response.use(
-  (res) => {
-    logger.info({ url: res.config.url, status: res.status }, 'API Response');
-    return res;
-  },
-  (error) => Promise.reject(error)
-);
-
-/**
- * Retry mechanism untuk menangani timeout / network error
- */
-async function withRetry(fn, context) {
-  let lastError;
-
-  for (let attempt = 1; attempt <= config.retryMaxAttempts; attempt++) {
-    try {
-      const result = await fn();
-      return result;
-    } catch (error) {
-      lastError = error;
-
-      if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK' || error.code === 'ECONNRESET') {
-        logger.warn({ attempt, context }, 'Request timeout/network error, retrying...');
-        if (attempt < config.retryMaxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, config.retryDelay * attempt));
-          continue;
-        }
+async function withRetry(fn, ctx) {
+  let lastErr;
+  for (let a = 1; a <= config.retryMaxAttempts; a++) {
+    try { return await fn(); } catch (e) {
+      lastErr = e;
+      if (['ECONNABORTED','ERR_NETWORK','ECONNRESET'].includes(e.code)) {
+        logger.warn({attempt:a,ctx},'Retry...');
+        if (a < config.retryMaxAttempts) { await new Promise(r => setTimeout(r, config.retryDelay * a)); continue; }
       }
-
-      throw error;
+      throw e;
     }
   }
-
-  throw lastError;
+  throw lastErr;
 }
 
-/**
- * Parse response dari API JasaOTP
- * Format response biasanya: { status: true, data: {...} } atau { status: false, msg: "..." }
- */
+// Parse response: handle { success: true/false, data: ... } format
 function parseResponse(response) {
   const data = response.data;
-
-  if (data === null || data === undefined) {
-    throw new Error('Server tidak memberikan respons');
-  }
-
-  // Jika response adalah string (kadang API return plain text)
-  if (typeof data === 'string') {
-    return { status: true, data: data.trim() };
-  }
-
-  // Jika response object dengan status
+  if (data === null || data === undefined) throw new Error('Server tidak memberikan respons');
+  if (typeof data === 'string') return { success: true, data: data.trim() };
   if (typeof data === 'object') {
-    if (data.status === false) {
-      const msg = data.msg || data.message || 'Terjadi kesalahan dari server';
-      throw new Error(msg);
-    }
+    if (data.success === false || data.code >= 400) throw new Error(data.message || data.msg || 'Error dari server');
     return data;
   }
-
-  return data;
+  return { success: true, data: data };
 }
 
-/**
- * GET /balance.php
- * Mendapatkan saldo API key
- */
+// GET /balance.php
 async function getBalance() {
   return withRetry(async () => {
-    const response = await client.get('/balance.php');
-    return parseResponse(response);
+    const r = await client.get('/balance.php');
+    const parsed = parseResponse(r);
+    // Response: { data: { saldo: 10000 } }
+    return parsed;
   }, 'getBalance');
 }
 
-/**
- * GET /negara.php
- * Mendapatkan daftar negara yang tersedia
- */
+// GET /negara.php
 async function getCountries() {
   return withRetry(async () => {
-    const response = await client.get('/negara.php');
-    return parseResponse(response);
+    const r = await client.get('/negara.php');
+    const parsed = parseResponse(r);
+    // Response: { data: [{id_negara: 0, nama_negara: "rusia"}, ...] }
+    return parsed;
   }, 'getCountries');
 }
 
-/**
- * GET /operator.php
- * Mendapatkan daftar operator berdasarkan negara
- * @param {string} country - Kode negara
- */
+// GET /operator.php?negara=ID (integer)
 async function getOperators(country) {
-  if (!country) {
-    throw new Error('Parameter negara harus diisi');
-  }
-
+  if (country === undefined || country === null || country === '') throw new Error('Parameter negara harus diisi');
+  const countryId = parseInt(country, 10);
+  if (isNaN(countryId)) throw new Error('ID negara harus berupa angka');
   return withRetry(async () => {
-    const response = await client.get('/operator.php', {
-      params: { negara: country },
-    });
-    return parseResponse(response);
-  }, `getOperators(${country})`);
+    const r = await client.get('/operator.php', { params: { negara: countryId } });
+    const parsed = parseResponse(r);
+    // Response: { data: { "6": ["any", "indosat", ...] } }
+    return parsed;
+  }, `getOperators(${countryId})`);
 }
 
-/**
- * GET /layanan.php
- * Mendapatkan daftar layanan berdasarkan negara
- * @param {string} country - Kode negara
- */
+// GET /layanan.php?negara=ID (integer)
 async function getServices(country) {
-  if (!country) {
-    throw new Error('Parameter negara harus diisi');
-  }
-
+  if (country === undefined || country === null || country === '') throw new Error('Parameter negara harus diisi');
+  const countryId = parseInt(country, 10);
+  if (isNaN(countryId)) throw new Error('ID negara harus berupa angka');
   return withRetry(async () => {
-    const response = await client.get('/layanan.php', {
-      params: { negara: country },
-    });
-    return parseResponse(response);
-  }, `getServices(${country})`);
+    const r = await client.get('/layanan.php', { params: { negara: countryId } });
+    const parsed = parseResponse(r);
+    // Response: { "6": { "wa": {harga: 3000, stok: 999, layanan: "whatsapp"}, ... } }
+    return parsed;
+  }, `getServices(${countryId})`);
 }
 
-/**
- * GET /order.php
- * Membuat order nomor virtual baru
- * @param {string} country - Kode negara
- * @param {string} service - Kode layanan
- * @param {string} operator - Kode operator
- */
+// GET /order.php
 async function createOrder(country, service, operator) {
-  if (!country || !service || !operator) {
-    throw new Error('Parameter negara, layanan, dan operator harus diisi');
-  }
-
+  if (country === undefined || country === null || country === '') throw new Error('Parameter negara harus diisi');
+  if (!service) throw new Error('Parameter layanan harus diisi');
+  if (!operator) throw new Error('Parameter operator harus diisi');
+  const countryId = parseInt(country, 10);
+  if (isNaN(countryId)) throw new Error('ID negara harus berupa angka');
   return withRetry(async () => {
-    const response = await client.get('/order.php', {
-      params: { negara: country, layanan: service, operator: operator },
-    });
-    return parseResponse(response);
-  }, `createOrder(${country}, ${service}, ${operator})`);
+    const r = await client.get('/order.php', { params: { negara: countryId, layanan: service, operator: operator } });
+    const parsed = parseResponse(r);
+    // Response: { data: { order_id: 1728868, number: "+6282272111384" } }
+    return parsed;
+  }, `createOrder(${countryId},${service},${operator})`);
 }
 
-/**
- * GET /sms.php
- * Mendapatkan OTP dari order tertentu
- * @param {string} orderId - ID order
- */
+// GET /sms.php?id=ORDER_ID
 async function getOTP(orderId) {
-  if (!orderId) {
-    throw new Error('Parameter order_id harus diisi');
-  }
-
+  if (!orderId && orderId !== 0) throw new Error('Parameter order_id harus diisi');
   return withRetry(async () => {
-    const response = await client.get('/sms.php', {
-      params: { id: orderId },
-    });
-    return parseResponse(response);
+    const r = await client.get('/sms.php', { params: { id: orderId } });
+    const parsed = parseResponse(r);
+    // Response: { data: { otp: "123456" } }
+    return parsed;
   }, `getOTP(${orderId})`);
 }
 
-/**
- * GET /cancel.php
- * Membatalkan order
- * @param {string} orderId - ID order
- */
+// GET /cancel.php?id=ORDER_ID
 async function cancelOrder(orderId) {
-  if (!orderId) {
-    throw new Error('Parameter order_id harus diisi');
-  }
-
+  if (!orderId && orderId !== 0) throw new Error('Parameter order_id harus diisi');
   return withRetry(async () => {
-    const response = await client.get('/cancel.php', {
-      params: { id: orderId },
-    });
-    return parseResponse(response);
-  }, `cancelOrder(${orderId})`);
+    const r = await client.get('/cancel.php', { params: { id: orderId } });
+    const parsed = parseResponse(r);
+    // Response: { data: { order_id: 1728868, refunded_amount: 3000 } }
+    return parsed;
+  }, `cancel(${orderId})`);
 }
 
-module.exports = {
-  getBalance,
-  getCountries,
-  getOperators,
-  getServices,
-  createOrder,
-  getOTP,
-  cancelOrder,
-};
+module.exports = { getBalance, getCountries, getOperators, getServices, createOrder, getOTP, cancelOrder };
